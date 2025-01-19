@@ -1,16 +1,14 @@
-# bamag/laraswagger
-
-## Introduction
-
-`bamagid/laraswagger` est un package Laravel conçu pour automatiser la génération de documentation Swagger. Une fois installé, il ne nécessite aucune configuration supplémentaire. Ce package garantit que votre documentation API reste toujours à jour avec un minimum d'effort.
-
-`bamagid/laraswagger` is a Laravel package designed to automate the generation of Swagger documentation. Once installed, it requires no additional configuration. This package ensures that your API documentation is always up to date with minimal effort.
+# bamagid/laraswagger
 
 ## 🌍 Documentation Multilingue
 
 [ENGLISH](#english) | [FRANÇAIS](#français)
 
 ## ENGLISH
+
+## Introduction
+
+`bamagid/laraswagger` is a Laravel package designed to automate the generation of Swagger documentation. Once installed, it requires no additional configuration. This package ensures that your API documentation is always up to date with minimal effort.
 
 ### 🎉 Features
 
@@ -66,6 +64,10 @@ php artisan swagger:generate
 ```
 
 ## FRANÇAIS
+
+## Introduction
+
+`bamagid/laraswagger` est un package Laravel conçu pour automatiser la génération de documentation Swagger. Une fois installé, il ne nécessite aucune configuration supplémentaire. Ce package garantit que votre documentation API reste toujours à jour avec un minimum d'effort.
 
 ### 🎉 Fonctionnalités
 
