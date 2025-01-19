@@ -43,7 +43,7 @@ trait SwaggerFiles
         copy($sourceFile, $destFile);
       }
     }
-    $viewSource = base_path('packages/laravel-swagger/src/views/index.blade.php');
+    $viewSource = base_path('vendor/bamagid/laraswagger/src/views/index.blade.php');
     $viewDest = resource_path('views/api-docs/index.blade.php');
 
     if (!file_exists($viewDest)) {
