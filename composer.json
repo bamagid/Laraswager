@@ -1,6 +1,7 @@
 {
   "name": "bamagid/laraswagger",
   "type": "library",
+  "license": "MIT",
   "keywords": [
     "laravel",
     "swagger",
