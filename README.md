@@ -78,7 +78,7 @@ php artisan swagger:generate
 ### 📦 Installation
 
 ```bash
-composer require bamag/laraswagger
+composer require bamagid/laraswagger
 ```
 
 ### ⚙️ Configuration
