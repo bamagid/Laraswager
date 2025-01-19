@@ -1,6 +1,7 @@
 {
   "name": "bamagid/laraswagger",
   "type": "library",
+  "license": "MIT",
   "keywords": [
     "laravel",
     "swagger",
@@ -34,5 +35,7 @@
         "LaraSwagger\\SwaggerGeneratorServiceProvider"
       ]
     }
-  }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
 }
