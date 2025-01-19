@@ -63,6 +63,14 @@ When `AUTO_GENERATE_DOCS` is set to false, generate documentation using:
 php artisan swagger:generate
 ```
 
+#### Accessing the Documentation
+
+The generated Swagger documentation is available at the following route:
+
+```bash
+/api/documentation
+```
+
 ## FRANÇAIS
 
 ## Introduction
@@ -109,4 +117,12 @@ AUTO_GENERATE_DOCS=true
 
 ```bash
 php artisan swagger:generate
+```
+
+#### Accéder à la Documentation
+
+La documentation Swagger générée est disponible à l'adresse suivante :
+
+```bash
+/api/documentation
 ```
