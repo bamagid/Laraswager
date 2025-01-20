@@ -35,7 +35,10 @@ trait SwaggerPropertiesTrait
         }
       } else {
         $properties[$field] = $this->mapValidationTypeToSwaggerType($rules);
-        if (in_array('confirmed', explode('|', $rules)) && strpos($field, 'password') !== false) {
+        if ((is_string($rules) && in_array('confirmed', explode('|', $rules))) ||
+          (is_array($rules) && in_array('confirmed', $rules)) &&
+          strpos($field, 'password') !== false
+        ) {
           $properties[$field . '_confirmation'] = ['type' => 'string'];
         }
       }
