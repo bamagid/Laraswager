@@ -27,31 +27,7 @@ trait TypeMapping
     return $swaggerTypeMap[$type] ?? ['type' => 'string'];
   }
 
-  private function generatePropertiesWithExceptionHandling($tableName, $columns)
-  {
-    $properties = [];
-
-    foreach ($columns as $column) {
-      try {
-        if ($column != "id" && $column != "created_at" && $column != "updated_at") {
-          $type = Schema::getColumnType($tableName, $column);
-          $properties[$column] = $this->mapColumnTypeToSwaggerType($type);
-        }
-      } catch (\Exception $e) {
-        $this->error("Error processing column: $column", [
-          'table' => $tableName,
-          'exception' => $e->getMessage()
-        ]);
-
-        // Provide a default value in case of error
-        $properties[$column] = ['type' => 'string', 'description' => 'Error processing this column.'];
-      }
-    }
-
-    return $properties;
-  }
-
-  private function mapValidationTypeToSwaggerTypeWithExceptionHandling($rules)
+  private function mapValidationTypeToSwaggerType($rules)
   {
     try {
       if (is_string($rules)) {
