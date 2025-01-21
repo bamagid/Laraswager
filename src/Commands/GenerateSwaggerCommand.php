@@ -23,8 +23,8 @@ class GenerateSwaggerCommand extends Command
     $swagger = [
       'openapi' => '3.0.0',
       'info' => [
-        'title' => 'API ' . env("APP_NAME"),
-        'description' => '',
+        'title' => env("APP_NAME"),
+        'description' => env('APP_DESCRIPTION'),
         'version' => '1.0.0'
       ],
       'security' => [['BearerAuth' => []]],
@@ -86,6 +86,21 @@ class GenerateSwaggerCommand extends Command
         if (!empty($parameters)) {
           $swagger['paths'][$path][strtolower($httpMethod)]['parameters'] = $parameters;
         }
+      } else {
+        $httpMethod = $this->normalizeMethod($route['method']);
+        $path = '/' . $route['uri'];
+        if ($path == '/api/documentation') {
+          return;
+        }
+        $parameters = $this->generateParameters($route['uri']);
+        $swagger['paths'][$path][strtolower($httpMethod)] = [
+          'summary' => '',
+          'tags' => ['Autres'],
+          'responses' => $this->generateResponses(),
+        ];
+        if (!empty($parameters)) {
+          $swagger['paths'][$path][strtolower($httpMethod)]['parameters'] = $parameters;
+        }
       }
     }
     $this->saveSwaggerFile($swagger);
@@ -138,7 +153,6 @@ class GenerateSwaggerCommand extends Command
   }
   private function getTableNameFromController($controller)
   {
-    // Mappez le nom de la table en fonction du nom du contrôleur
     $baseName = str_replace('Controller', '', class_basename($controller));
     return strtolower($baseName) . 's';
   }
@@ -151,18 +165,14 @@ class GenerateSwaggerCommand extends Command
     foreach ($params as $param) {
       $paramClass = $param->getClass();
 
-      // Vérifier les validations dans la méthode du contrôleur
       if ($methodReflection->isUserDefined()) {
         $methodCode = file($reflection->getFileName());
         $methodStartLine = $methodReflection->getStartLine() - 1;
         $methodEndLine = $methodReflection->getEndLine();
         $methodBody = array_slice($methodCode, $methodStartLine, $methodEndLine - $methodStartLine);
         $methodBodyString = implode("", $methodBody);
-        // Expression régulière pour trouver une variable contenant une instance de Validator 
-        // Expressions régulières pour trouver des tableaux de validation
         $regexArray = [
           '/\$request->validate\((\[\s*\S.*?\s*\])\)/s',
-          // '/Validator::make\(\$request->all\(\),\s* (\[\s*\S.*?\s*\]) \)/s',
           '/\$(\w+)\s*=\s*Validator::make\(([^;]*)\);/s',
           '/\$rules\s*=\s* (\[\s*\S.*?\s*\]);/s'
         ];
@@ -175,14 +185,11 @@ class GenerateSwaggerCommand extends Command
             } else {
               $validationArrayString = $matches[1];
             }
-            // Expression régulière pour supprimer toutes les variables dans le tableau de validation
             $validationArrayString = preg_replace('/\.\s*\$\w+(->\w+)*/', '', $validationArrayString);
             return eval('return ' . $validationArrayString . ';');
           }
         }
       }
-
-      // Vérifier les validations dans les requêtes personnalisées
       if ($paramClass && is_subclass_of($paramClass->name, 'Illuminate\Foundation\Http\FormRequest')) {
         $formRequest = new $paramClass->name();
 

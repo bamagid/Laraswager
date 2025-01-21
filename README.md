@@ -25,6 +25,12 @@ composer require bamagid/laraswagger
 ### ⚙️ Configuration
 
 No additional setup is required post-installation. The package works out of the box.
+However, if you'd like to customize the title or description of your API in the Swagger documentation, you can do so by editing the .env file.
+
+```env
+APP_NAME: The title of your API
+APP_DESCRIPTION: The description of your APP
+```
 
 ### 🛠️ Usage
 
@@ -92,6 +98,13 @@ composer require bamagid/laraswagger
 ### ⚙️ Configuration
 
 Aucune configuration supplémentaire requise après l'installation.
+
+Si vous souhaitez personnaliser le titre ou la description de votre API dans la documentation Swagger, vous pouvez le faire en modifiant votre fichier .env.
+
+```env
+APP_NAME: The title of your API
+APP_DESCRIPTION: The description of your APP
+```
 
 ### 🛠️ Utilisation
 

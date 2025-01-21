@@ -21,6 +21,7 @@ class SwaggerGeneratorServiceProvider extends ServiceProvider
   public function boot()
   {
     $this->ensureEnvKeyExists('AUTO_GENERATE_DOCS', 'true');
+    $this->ensureEnvKeyExists('APP_DESCRIPTION', '');
     if (env('AUTO_GENERATE_DOCS', false)) {
       Event::listen(CommandStarting::class, [ArtisanCommandListener::class, 'handleCommandStarting']);
       Event::listen(CommandFinished::class, [ArtisanCommandListener::class, 'handleCommandFinished']);
