@@ -181,7 +181,7 @@ class GenerateSwaggerCommand extends Command
 
           if (preg_match($regex, $methodBodyString, $matches)) {
             if (isset($matches[2])) {
-              $validationArrayString = preg_replace('/\$\w+(->\w+)*,/', '', $matches[2], 1);
+              $validationArrayString = preg_replace('/\$\w+(\->\w+(\(\))?)*,/', '', $matches[2]);
             } else {
               $validationArrayString = $matches[1];
             }
