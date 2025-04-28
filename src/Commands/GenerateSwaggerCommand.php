@@ -62,7 +62,7 @@ class GenerateSwaggerCommand extends Command
           'responses' => $this->generateResponses(),
         ];
 
-        if ($httpMethod == 'POST' || $httpMethod == 'PUT') {
+        if ($httpMethod == 'POST') {
           $schema = [
             'type' => 'object',
             'properties' => $properties,
@@ -75,6 +75,25 @@ class GenerateSwaggerCommand extends Command
           $swagger['paths'][$path][strtolower($httpMethod)]['requestBody'] = [
             'content' => [
               'multipart/form-data' => [
+                'schema' => $schema,
+                // 'example' => $this->generateExample($columns),
+              ],
+            ],
+          ];
+        }
+        if ($httpMethod == 'PUT' || $httpMethod == 'PATCH') {
+          $schema = [
+            'type' => 'object',
+            'properties' => $properties,
+          ];
+
+          if (!empty($requiredFields)) {
+            $schema['required'] = $requiredFields;
+          }
+
+          $swagger['paths'][$path][strtolower($httpMethod)]['requestBody'] = [
+            'content' => [
+              'application/x-www-form-urlencoded' => [
                 'schema' => $schema,
                 'example' => $this->generateExample($columns),
               ],
