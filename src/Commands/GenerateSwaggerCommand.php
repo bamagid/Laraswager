@@ -95,7 +95,7 @@ class GenerateSwaggerCommand extends Command
             'content' => [
               'application/x-www-form-urlencoded' => [
                 'schema' => $schema,
-                'example' => $this->generateExample($columns),
+                // 'example' => $this->generateExample($columns),
               ],
             ],
           ];
