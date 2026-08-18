@@ -3,7 +3,7 @@
 namespace LaraSwagger\Traits;
 
 use Illuminate\Support\Facades\Route;
-use Exception;
+use LaraSwagger\Exceptions\SwaggerGenerationException;
 
 trait RouteScanner
 {
@@ -39,10 +39,16 @@ trait RouteScanner
       });
 
       return $routes->filter(function ($route) {
-        return strpos($route['uri'], 'api/') === 0 && !in_array($route['uri'], ['api/documentation', 'api/oauth2-callback']);
+        return strpos($route['uri'], 'api/') === 0 && ! in_array($route['uri'], ['api/documentation', 'api/oauth2-callback']);
       })->values();
-    } catch (Exception $e) {
-      $this->error("Error scanning routes: " . $e->getMessage());
+    } catch (\Throwable $e) {
+      $this->issues[] = SwaggerGenerationException::routeIntrospectionFailed(
+        '-',
+        'Impossible de lister les routes de l\'application: '.$e->getMessage(),
+        'Vérifiez que routes/api.php se charge sans erreur (php artisan route:list).',
+      );
+
+      return collect();
     }
   }
 
@@ -70,27 +76,36 @@ trait RouteScanner
       ];
 
       return $parameters;
-    } catch (Exception $e) {
-      $this->error("Error generating parameters for URI '{$uri}' ");
+    } catch (\Throwable $e) {
+      $this->issues[] = SwaggerGenerationException::routeIntrospectionFailed(
+        $uri,
+        'Impossible de générer les paramètres de route: '.$e->getMessage(),
+        "Vérifiez la déclaration de la route \"{$uri}\".",
+      );
+
       return [];
     }
   }
 
   private function normalizeMethod($methods)
   {
-    try {
-      if (is_array($methods)) {
-        if (in_array('GET', $methods)) {
-          return 'GET';
-        }
-        if (in_array('PUT', $methods)) {
-          return 'PUT';
-        }
-      }
-      return strtoupper($methods[0]);
-    } catch (Exception $e) {
-      $this->error("Error normalizing methods: " . $methods[0]);
+    if (! is_array($methods) || empty($methods)) {
+      $this->issues[] = SwaggerGenerationException::routeIntrospectionFailed(
+        is_string($methods) ? $methods : json_encode($methods),
+        'Aucune méthode HTTP valide trouvée pour cette route.',
+        'Vérifiez la déclaration de la route correspondante dans routes/api.php.',
+      );
+
       return 'UNKNOWN';
     }
+
+    if (in_array('GET', $methods, true)) {
+      return 'GET';
+    }
+    if (in_array('PUT', $methods, true)) {
+      return 'PUT';
+    }
+
+    return strtoupper($methods[0]);
   }
 }

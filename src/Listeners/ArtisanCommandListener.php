@@ -2,14 +2,15 @@
 
 namespace LaraSwagger\Listeners;
 
-use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Support\Facades\Artisan;
 use Symfony\Component\Process\Process;
 
 class ArtisanCommandListener
 {
   protected $watchProcess;
+
   public function handleCommandStarting(CommandStarting $event)
   {
     if ($event->command === 'serve') {
@@ -22,7 +23,6 @@ class ArtisanCommandListener
     if ($event->command !== 'swagger:generate') {
       Artisan::call('swagger:generate');
     }
-
 
     if ($event->command === 'serve') {
       $this->stopWatchingApiRoutes();

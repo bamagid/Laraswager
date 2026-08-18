@@ -1,5 +1,6 @@
 {
   "name": "bamagid/laraswagger",
+  "description": "Automatic Swagger/OpenAPI documentation generator for Laravel applications.",
   "type": "library",
   "license": "MIT",
   "keywords": [
@@ -9,9 +10,7 @@
     "laraswagger",
     "swagger-ui",
     "OpenApi",
-    "documentation",
-    "API",
-    "UI"
+    "documentation"
   ],
   "authors": [
     {
@@ -22,18 +21,68 @@
   "require": {
     "php": "^7.2 || ^8.0",
     "laravel/framework": "^11.0 || ^10.0 || ^9.0 || >=8.40.0 || ^7.0",
-    "swagger-api/swagger-ui": "^3.0 || >=4.1.3"
+    "swagger-api/swagger-ui": "^3.0 || >=4.1.3",
+    "nikic/php-parser": "^4.18 || ^5.0"
+  },
+  "require-dev": {
+    "laravel/pint": "^1.13",
+    "larastan/larastan": "^2.9",
+    "orchestra/testbench": "^8.0 || ^9.0",
+    "pestphp/pest": "^2.34",
+    "pestphp/pest-plugin-laravel": "^2.3"
   },
   "autoload": {
     "psr-4": {
       "LaraSwagger\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "LaraSwagger\\Tests\\": "tests/",
+      "Workbench\\App\\": "workbench/app/",
+      "Workbench\\Database\\Factories\\": "workbench/database/factories/",
+      "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
+    }
+  },
+  "scripts": {
+    "post-autoload-dump": [
+      "@php vendor/bin/testbench package:discover --ansi"
+    ],
+    "serve": [
+      "Composer\\Config::disableProcessTimeout",
+      "@php vendor/bin/testbench swagger:generate --ansi",
+      "@php vendor/bin/testbench serve --ansi"
+    ],
+    "lint": [
+      "vendor/bin/pint --parallel"
+    ],
+    "lint:check": [
+      "vendor/bin/pint --parallel --test"
+    ],
+    "analyse": [
+      "vendor/bin/phpstan analyse --memory-limit=512M"
+    ],
+    "test:unit": [
+      "vendor/bin/pest"
+    ],
+    "test": [
+      "@analyse",
+      "@lint:check",
+      "@test:unit"
+    ]
+  },
   "extra": {
     "laravel": {
       "providers": [
         "LaraSwagger\\SwaggerGeneratorServiceProvider"
       ]
+    }
+  },
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "pestphp/pest-plugin": true,
+      "phpstan/extension-installer": true
     }
   },
   "minimum-stability": "dev",

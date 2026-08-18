@@ -3,33 +3,56 @@
 namespace LaraSwagger\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Schema;
-use ReflectionClass;
+use Illuminate\Support\Str;
+use LaraSwagger\Exceptions\SwaggerGenerationException;
+use LaraSwagger\Support\ValidationRuleExtractor;
 use LaraSwagger\Traits\RouteScanner;
 use LaraSwagger\Traits\SwaggerFiles;
 use LaraSwagger\Traits\SwaggerPropertiesTrait;
 use LaraSwagger\Traits\TypeMapping;
+use ReflectionClass;
 
 class GenerateSwaggerCommand extends Command
 {
-  use SwaggerPropertiesTrait, SwaggerFiles, RouteScanner, TypeMapping;
+  use RouteScanner, SwaggerFiles, SwaggerPropertiesTrait, TypeMapping;
+
   protected $signature = 'swagger:generate';
+
   protected $description = 'Generate Swagger documentation based on migrations and/or validations';
+
+  /**
+   * Issues collected while generating the documentation. Populated by the
+   * traits used above; printed as a summary table at the end of handle().
+   *
+   * @var SwaggerGenerationException[]
+   */
+  private $issues = [];
+
   public function handle()
   {
+    $this->issues = [];
     $this->copySwaggerFiles();
     $routes = $this->scanRoutes();
+
+    if ($routes->isEmpty() && ! file_exists(base_path('routes/api.php'))) {
+      $this->warn('Aucune route API trouvée et aucun fichier routes/api.php détecté : ce package ne documente que les routes de l\'API.');
+      $this->warn('Exécutez `php artisan install:api` (ou créez routes/api.php vous-même), puis relancez `php artisan swagger:generate`.');
+
+      return;
+    }
 
     $swagger = [
       'openapi' => '3.0.0',
       'info' => [
-        'title' => env("APP_NAME"),
-        'description' => env('APP_DESCRIPTION'),
-        'version' => '1.0.0'
+        'title' => config('laraswagger.title'),
+        'description' => config('laraswagger.description'),
+        'version' => '1.0.0',
       ],
       'security' => [['BearerAuth' => []]],
       'components' => ['securitySchemes' => ['BearerAuth' => ['type' => 'http', 'scheme' => 'bearer', 'bearerFormat' => 'JWT']]],
-      'consumes' => ["multipart/form-data"],
+      'consumes' => ['multipart/form-data'],
       'paths' => [],
     ];
 
@@ -38,24 +61,53 @@ class GenerateSwaggerCommand extends Command
         $controllerAction = explode('@', $route['action']);
         $controller = $controllerAction[0];
         $method = $controllerAction[1];
-        $reflection = new ReflectionClass($controller);
-        $methodReflection = $reflection->getMethod($method);
+
+        try {
+          $reflection = new ReflectionClass($controller);
+          $methodReflection = $reflection->getMethod($method);
+        } catch (\ReflectionException $e) {
+          $this->issues[] = SwaggerGenerationException::routeIntrospectionFailed(
+            '/'.$route['uri'],
+            "Le contrôleur ou la méthode \"{$route['action']}\" est introuvable: ".$e->getMessage(),
+            'Vérifiez que la classe et la méthode existent bien et sont orthographiées correctement dans les routes.',
+          );
+
+          continue;
+        }
+
         $docComment = $methodReflection->getDocComment();
+        if ($docComment && preg_match('/@swagger-ignore\b/', $docComment)) {
+          continue;
+        }
+
         $tableName = $this->getTableNameFromController($controller);
-        $columns = Schema::getColumnListing($tableName);
         $summary = '';
-        if ($docComment && preg_match('/summary\s=\s*(.*?)(\s*\*|\s*$)/', $docComment, $matches)) {
+        if ($docComment && preg_match('/@summary\s+(.*)/', $docComment, $matches)) {
           $summary = trim($matches[1]);
         }
+
         $validations = $this->getValidationsFromMethod($controller, $method);
-        if (!empty($validations)) {
-          [$properties, $requiredFields] = $this->generatePropertiesFromValidations($validations);
+        if (! empty($validations)) {
+          [$properties, $requiredFields] = $this->generatePropertiesFromValidations($validations, $controller, $method);
         } else {
-          $properties = $this->generateProperties($tableName, $columns);
+          // Only touch the database when there is no validation to read properties from,
+          // and never let a DB/connection failure abort the whole command.
+          try {
+            $columns = Schema::hasTable($tableName) ? Schema::getColumnListing($tableName) : [];
+          } catch (\Throwable $e) {
+            $this->issues[] = SwaggerGenerationException::columnIntrospectionFailed(
+              $tableName,
+              'Impossible de lire les colonnes depuis la base de données: '.$e->getMessage(),
+              'Vérifiez votre configuration de base de données (.env), ou ajoutez une validation (FormRequest / $request->validate()) pour ne pas dépendre du schéma de la table.',
+            );
+            $columns = [];
+          }
+          $properties = $this->generateProperties($tableName, $columns, $controller, $method);
           $requiredFields = [];
         }
+
         $httpMethod = $this->normalizeMethod($route['method']);
-        $path = '/' . $route['uri'];
+        $path = '/'.$route['uri'];
         $swagger['paths'][$path][strtolower($httpMethod)] = [
           'summary' => $summary,
           'tags' => [ucwords(str_replace('_', ' ', $tableName))],
@@ -68,7 +120,7 @@ class GenerateSwaggerCommand extends Command
             'properties' => $properties,
           ];
 
-          if (!empty($requiredFields)) {
+          if (! empty($requiredFields)) {
             $schema['required'] = $requiredFields;
           }
 
@@ -76,7 +128,6 @@ class GenerateSwaggerCommand extends Command
             'content' => [
               'multipart/form-data' => [
                 'schema' => $schema,
-                // 'example' => $this->generateExample($columns),
               ],
             ],
           ];
@@ -87,7 +138,7 @@ class GenerateSwaggerCommand extends Command
             'properties' => $properties,
           ];
 
-          if (!empty($requiredFields)) {
+          if (! empty($requiredFields)) {
             $schema['required'] = $requiredFields;
           }
 
@@ -95,21 +146,20 @@ class GenerateSwaggerCommand extends Command
             'content' => [
               'application/x-www-form-urlencoded' => [
                 'schema' => $schema,
-                // 'example' => $this->generateExample($columns),
               ],
             ],
           ];
         }
 
         $parameters = $this->generateParameters($route['uri']);
-        if (!empty($parameters)) {
+        if (! empty($parameters)) {
           $swagger['paths'][$path][strtolower($httpMethod)]['parameters'] = $parameters;
         }
       } else {
         $httpMethod = $this->normalizeMethod($route['method']);
-        $path = '/' . $route['uri'];
+        $path = '/'.$route['uri'];
         if ($path == '/api/documentation') {
-          return;
+          continue;
         }
         $parameters = $this->generateParameters($route['uri']);
         $swagger['paths'][$path][strtolower($httpMethod)] = [
@@ -117,27 +167,37 @@ class GenerateSwaggerCommand extends Command
           'tags' => ['Autres'],
           'responses' => $this->generateResponses(),
         ];
-        if (!empty($parameters)) {
+        if (! empty($parameters)) {
           $swagger['paths'][$path][strtolower($httpMethod)]['parameters'] = $parameters;
         }
       }
     }
     $this->saveSwaggerFile($swagger);
+    $this->reportIssues();
     $this->info('Swagger documentation generated successfully!');
   }
 
-  private function generateExample($columns)
+  private function reportIssues()
   {
-    $example = [];
-    foreach ($columns as $column) {
-      if ($column == 'image') {
-        $example[$column] = 'binary data';
-      } else {
-        $example[$column] = 'example ' . $column;
-      }
+    if (empty($this->issues)) {
+      return;
     }
-    return $example;
+
+    $rows = [];
+    foreach ($this->issues as $issue) {
+      $rows[] = [
+        $issue->actionLabel(),
+        $issue->field() ?? '-',
+        $issue->reason(),
+        $issue->suggestion(),
+      ];
+    }
+
+    $this->newLine();
+    $this->warn(sprintf('%d avertissement(s) rencontré(s) pendant la génération de la documentation :', count($this->issues)));
+    $this->table(['Contrôleur::méthode / Route', 'Champ', 'Problème', 'Recommandation'], $rows);
   }
+
   private function generateResponses()
   {
     return [
@@ -170,53 +230,58 @@ class GenerateSwaggerCommand extends Command
       ],
     ];
   }
+
   private function getTableNameFromController($controller)
   {
     $baseName = str_replace('Controller', '', class_basename($controller));
-    return strtolower($baseName) . 's';
+
+    return Str::snake(Str::plural($baseName));
   }
+
+  /**
+   * @return array<string, mixed>
+   */
   private function getValidationsFromMethod($controller, $method)
   {
     $reflection = new ReflectionClass($controller);
     $methodReflection = $reflection->getMethod($method);
-    $params = $methodReflection->getParameters();
 
-    foreach ($params as $param) {
-      $paramClass = $param->getClass();
-
-      if ($methodReflection->isUserDefined()) {
-        $methodCode = file($reflection->getFileName());
-        $methodStartLine = $methodReflection->getStartLine() - 1;
-        $methodEndLine = $methodReflection->getEndLine();
-        $methodBody = array_slice($methodCode, $methodStartLine, $methodEndLine - $methodStartLine);
-        $methodBodyString = implode("", $methodBody);
-        $regexArray = [
-          '/\$request->validate\((\[\s*\S.*?\s*\])\)/s',
-          '/\$(\w+)\s*=\s*Validator::make\(([^;]*)\);/s',
-          '/\$rules\s*=\s* (\[\s*\S.*?\s*\]);/s'
-        ];
-
-        foreach ($regexArray as $regex) {
-
-          if (preg_match($regex, $methodBodyString, $matches)) {
-            if (isset($matches[2])) {
-              $validationArrayString = preg_replace('/\$\w+(\->\w+(\(\))?)*,/', '', $matches[2]);
-            } else {
-              $validationArrayString = $matches[1];
-            }
-            $validationArrayString = preg_replace('/\.\s*\$\w+(->\w+)*/', '', $validationArrayString);
-            return eval('return ' . $validationArrayString . ';');
-          }
-        }
+    foreach ($methodReflection->getParameters() as $param) {
+      $type = $param->getType();
+      if (! $type instanceof \ReflectionNamedType || $type->isBuiltin()) {
+        continue;
       }
-      if ($paramClass && is_subclass_of($paramClass->name, 'Illuminate\Foundation\Http\FormRequest')) {
-        $formRequest = new $paramClass->name();
 
-        $validationArray = $formRequest->rules();
-        return $validationArray;
+      $paramClass = $type->getName();
+      if (is_subclass_of($paramClass, FormRequest::class)) {
+        try {
+          // is_subclass_of() above guarantees a rules() method at runtime; the dynamic
+          // class name just makes it invisible to static analysis.
+          // @phpstan-ignore-next-line
+          return (new $paramClass)->rules();
+        } catch (\Throwable $e) {
+          $this->issues[] = SwaggerGenerationException::formRequestResolutionFailed(
+            $paramClass,
+            $controller,
+            $method,
+            $e,
+            'Évitez de dépendre du contexte HTTP réel ($this->route(), auth(), ...) dans rules() si la doc doit '
+              .'pouvoir être générée en dehors d\'une requête, ou fournissez une valeur par défaut sûre.',
+          );
+
+          return [];
+        }
       }
     }
 
-    return [];
+    if (! $methodReflection->isUserDefined()) {
+      return [];
+    }
+
+    $extractor = new ValidationRuleExtractor;
+    $rules = $extractor->extractFromMethod($methodReflection, $controller, $method);
+    $this->issues = array_merge($this->issues, $extractor->issues());
+
+    return $rules;
   }
 }

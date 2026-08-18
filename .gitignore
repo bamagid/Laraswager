@@ -1,0 +1,11 @@
+/vendor
+/build
+/.phpunit.cache
+/workbench
+/tests
+/testbench.yaml
+/phpunit.xml.dist
+/phpstan.neon.dist
+/pint.json
+.env
+.DS_Store
