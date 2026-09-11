@@ -30,6 +30,17 @@ class SwaggerGenerationException extends RuntimeException
   /** @var string */
   private $suggestion;
 
+  /**
+   * Whether this issue leaves something genuinely undocumented (a route,
+   * a field, the whole file) as opposed to a cosmetic fallback (e.g. a
+   * field still gets documented, just typed as "string"). Only blocking
+   * issues are surfaced to the console — a cosmetic fallback that still
+   * produces complete documentation isn't worth interrupting the output for.
+   *
+   * @var bool
+   */
+  private $blocking;
+
   private function __construct(
     string $reason,
     string $suggestion,
@@ -38,6 +49,7 @@ class SwaggerGenerationException extends RuntimeException
     ?string $field = null,
     $rule = null,
     ?Throwable $previous = null,
+    bool $blocking = true,
   ) {
     $this->controller = $controller;
     $this->method = $method;
@@ -45,6 +57,7 @@ class SwaggerGenerationException extends RuntimeException
     $this->rule = $rule;
     $this->reason = $reason;
     $this->suggestion = $suggestion;
+    $this->blocking = $blocking;
 
     parent::__construct($this->buildMessage(), 0, $previous);
   }
@@ -55,10 +68,16 @@ class SwaggerGenerationException extends RuntimeException
     string $field,
     string $reason,
     string $suggestion,
+    bool $blocking = true,
   ): self {
-    return new self($reason, $suggestion, $controller, $method, $field);
+    return new self($reason, $suggestion, $controller, $method, $field, null, null, $blocking);
   }
 
+  /**
+   * A single rule the generator can't type (custom rule, closure, ...).
+   * Always non-blocking: the field still gets documented, defaulted to
+   * "type": "string".
+   */
   public static function unsupportedRule(
     string $controller,
     string $method,
@@ -68,7 +87,7 @@ class SwaggerGenerationException extends RuntimeException
   ): self {
     $reason = 'Règle de validation non reconnue: '.self::describeRule($rawRule);
 
-    return new self($reason, $suggestion, $controller, $method, $field, $rawRule);
+    return new self($reason, $suggestion, $controller, $method, $field, $rawRule, null, false);
   }
 
   public static function formRequestResolutionFailed(
@@ -91,6 +110,11 @@ class SwaggerGenerationException extends RuntimeException
   public static function columnIntrospectionFailed(string $table, string $reason, string $suggestion): self
   {
     return new self($reason, $suggestion, null, null, $table);
+  }
+
+  public function blocking(): bool
+  {
+    return $this->blocking;
   }
 
   public function controller(): ?string

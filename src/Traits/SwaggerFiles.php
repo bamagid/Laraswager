@@ -66,7 +66,7 @@ trait SwaggerFiles
       $this->issues[] = SwaggerGenerationException::routeIntrospectionFailed(
         '-',
         'Échec de la copie des fichiers statiques Swagger UI: '.$e->getMessage(),
-        'Vérifiez que swagger-api/swagger-ui est bien installé dans vendor/ et que public/ est accessible en écriture.',
+        "Vérifiez l'installation de swagger-api/swagger-ui.",
       );
     }
   }

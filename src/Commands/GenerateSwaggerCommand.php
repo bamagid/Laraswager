@@ -33,6 +33,21 @@ class GenerateSwaggerCommand extends Command
   public function handle()
   {
     $this->issues = [];
+
+    try {
+      $this->generate();
+    } catch (\Throwable $e) {
+      $this->reportIssues();
+      $this->renderFatalError($e);
+
+      return 1;
+    }
+
+    return 0;
+  }
+
+  private function generate()
+  {
     $this->copySwaggerFiles();
     $routes = $this->scanRoutes();
 
@@ -69,7 +84,7 @@ class GenerateSwaggerCommand extends Command
           $this->issues[] = SwaggerGenerationException::routeIntrospectionFailed(
             '/'.$route['uri'],
             "Le contrôleur ou la méthode \"{$route['action']}\" est introuvable: ".$e->getMessage(),
-            'Vérifiez que la classe et la méthode existent bien et sont orthographiées correctement dans les routes.',
+            'Vérifiez le contrôleur et la méthode de cette route.',
           );
 
           continue;
@@ -98,7 +113,7 @@ class GenerateSwaggerCommand extends Command
             $this->issues[] = SwaggerGenerationException::columnIntrospectionFailed(
               $tableName,
               'Impossible de lire les colonnes depuis la base de données: '.$e->getMessage(),
-              'Vérifiez votre configuration de base de données (.env), ou ajoutez une validation (FormRequest / $request->validate()) pour ne pas dépendre du schéma de la table.',
+              'Vérifiez votre configuration de base de données.',
             );
             $columns = [];
           }
@@ -179,12 +194,47 @@ class GenerateSwaggerCommand extends Command
 
   private function reportIssues()
   {
-    if (empty($this->issues)) {
+    // Cosmetic fallbacks (e.g. an unrecognized rule falling back to "type":
+    // "string") still produce complete documentation and aren't worth
+    // surfacing. Only issues that leave something genuinely undocumented
+    // are shown.
+    $blockingIssues = array_values(array_filter($this->issues, function (SwaggerGenerationException $issue) {
+      return $issue->blocking();
+    }));
+
+    $this->issues = [];
+
+    if (empty($blockingIssues)) {
       return;
     }
 
+    if ($this->promptsAvailable()) {
+      $this->reportIssuesWithPrompts($blockingIssues);
+    } else {
+      $this->reportIssuesPlain($blockingIssues);
+    }
+  }
+
+  /**
+   * laravel/prompts ships a terminal-width-aware table (unlike Symfony's
+   * Table helper, which doesn't wrap long cell content), so we prefer it
+   * when it's installed. It only supports Laravel 10+, so anything older
+   * falls back to reportIssuesPlain().
+   */
+  private function promptsAvailable(): bool
+  {
+    return function_exists('Laravel\Prompts\warning') && function_exists('Laravel\Prompts\table');
+  }
+
+  /**
+   * @param  SwaggerGenerationException[]  $issues
+   */
+  private function reportIssuesWithPrompts(array $issues): void
+  {
+    \Laravel\Prompts\warning(sprintf('%d avertissement(s) bloquant(s) rencontré(s) pendant la génération de la documentation.', count($issues)));
+
     $rows = [];
-    foreach ($this->issues as $issue) {
+    foreach ($issues as $issue) {
       $rows[] = [
         $issue->actionLabel(),
         $issue->field() ?? '-',
@@ -193,9 +243,58 @@ class GenerateSwaggerCommand extends Command
       ];
     }
 
+    \Laravel\Prompts\table(['Contrôleur::méthode / Route', 'Champ', 'Problème', 'Recommandation'], $rows);
+  }
+
+  /**
+   * @param  SwaggerGenerationException[]  $issues
+   */
+  private function reportIssuesPlain(array $issues): void
+  {
     $this->newLine();
-    $this->warn(sprintf('%d avertissement(s) rencontré(s) pendant la génération de la documentation :', count($this->issues)));
-    $this->table(['Contrôleur::méthode / Route', 'Champ', 'Problème', 'Recommandation'], $rows);
+    $this->warn(sprintf('%d avertissement(s) bloquant(s) rencontré(s) pendant la génération de la documentation :', count($issues)));
+
+    foreach ($issues as $issue) {
+      $location = $issue->field()
+        ? $issue->actionLabel().' — champ "'.$issue->field().'"'
+        : $issue->actionLabel();
+
+      $this->newLine();
+      $this->line('  <fg=yellow;options=bold>➜</> <options=bold>'.$location.'</>');
+      $this->line('    '.$issue->reason());
+      $this->line('    <fg=gray>→ '.$issue->suggestion().'</>');
+    }
+  }
+
+  /**
+   * Renders an unexpected (non-recoverable) exception as a clear, bounded
+   * error block instead of letting Artisan's default handler dump a raw
+   * stack trace to the console.
+   */
+  private function renderFatalError(\Throwable $e): void
+  {
+    $details = 'Type : '.get_class($e)."\n"
+      .'Message : '.$e->getMessage()."\n"
+      .'Origine : '.$e->getFile().':'.$e->getLine();
+
+    if ($this->promptsAvailable() && function_exists('Laravel\Prompts\error') && function_exists('Laravel\Prompts\note')) {
+      \Laravel\Prompts\error('La génération de la documentation a été interrompue par une erreur inattendue.');
+      \Laravel\Prompts\note($details);
+    } else {
+      $this->newLine();
+      $this->error('La génération de la documentation a été interrompue par une erreur inattendue.');
+      $this->line('  <fg=red;options=bold>Type</> : '.get_class($e));
+      $this->line('  <fg=red;options=bold>Message</> : '.$e->getMessage());
+      $this->line('  <fg=red;options=bold>Origine</> : '.$e->getFile().':'.$e->getLine());
+    }
+
+    if ($this->output->isVerbose()) {
+      $this->newLine();
+      $this->line('<fg=gray>'.$e->getTraceAsString().'</>');
+    } else {
+      $this->newLine();
+      $this->comment('Relancez la commande avec -v pour afficher la pile d\'appels complète.');
+    }
   }
 
   private function generateResponses()
@@ -265,8 +364,7 @@ class GenerateSwaggerCommand extends Command
             $controller,
             $method,
             $e,
-            'Évitez de dépendre du contexte HTTP réel ($this->route(), auth(), ...) dans rules() si la doc doit '
-              .'pouvoir être générée en dehors d\'une requête, ou fournissez une valeur par défaut sûre.',
+            'Vérifiez la méthode rules() de ce FormRequest.',
           );
 
           return [];

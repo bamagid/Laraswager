@@ -55,7 +55,7 @@ class ValidationRuleExtractor
         $method,
         '-',
         "Le fichier source n'a pas pu être analysé: {$e->getMessage()}",
-        'Vérifiez la syntaxe du contrôleur (php -l sur le fichier).',
+        'Vérifiez la syntaxe du contrôleur.',
       );
 
       return [];
@@ -163,7 +163,7 @@ class ValidationRuleExtractor
         '-',
         'Un appel de validation a été trouvé, mais son tableau de règles est construit dynamiquement '
           .'('.$this->describeNode($node).') et ne peut pas être lu sans exécuter de code.',
-        'Passez un tableau littéral directement, ou utilisez un FormRequest pour cette validation.',
+        'Utilisez un tableau littéral ou un FormRequest.',
       );
     }
 
@@ -242,9 +242,7 @@ class ValidationRuleExtractor
             $method,
             $field,
             $this->describeNode($item->value),
-            "Cette règle n'est pas une valeur littérale et ne peut pas être lue sans exécuter de code. "
-              .'Remplacez-la par une chaîne (ex: "required|string"), ou utilisez un FormRequest '
-              .'si la règle doit rester dynamique.',
+            'Utilisez une règle littérale ou un FormRequest.',
           );
 
           continue;
@@ -263,9 +261,7 @@ class ValidationRuleExtractor
         $method,
         $field,
         $this->describeNode($node),
-        "La définition de cette règle n'est pas une valeur littérale (chaîne ou tableau) et ne peut pas être "
-          .'lue sans exécuter de code. Utilisez une chaîne/tableau littéral, ou déplacez cette validation '
-          .'dans un FormRequest.',
+        'Utilisez une règle littérale ou un FormRequest.',
       );
 
       return 'string';

@@ -26,10 +26,14 @@
   },
   "require-dev": {
     "laravel/pint": "^1.13",
+    "laravel/prompts": "^0.1.24 || ^1.0",
     "larastan/larastan": "^2.9",
     "orchestra/testbench": "^8.0 || ^9.0",
     "pestphp/pest": "^2.34",
     "pestphp/pest-plugin-laravel": "^2.3"
+  },
+  "suggest": {
+    "laravel/prompts": "Nicer, terminal-width-aware rendering of swagger:generate's warning/error output on Laravel 10+. Falls back to plain console output if not installed."
   },
   "autoload": {
     "psr-4": {

@@ -56,7 +56,7 @@ trait SwaggerPropertiesTrait
           $method ?? '',
           (string) $field,
           'Erreur inattendue lors du traitement de ce champ: '.$e->getMessage(),
-          'Vérifiez la définition de cette règle de validation. Si le problème persiste, ouvrez une issue avec ce message.',
+          'Vérifiez la définition de cette règle de validation.',
         );
       }
     }
@@ -101,7 +101,8 @@ trait SwaggerPropertiesTrait
                             $method ?? '',
                             $column,
                             "Les valeurs de l'enum de la colonne \"$column\" ($tableName) ne sont pas un tableau littéral et n'ont pas pu être lues sans exécuter de code.",
-                            "Définissez les valeurs directement dans la migration, ex: \$table->enum('$column', ['valeur_a', 'valeur_b']).",
+                            'Définissez les valeurs directement dans la migration.',
+                            false,
                           );
                         } else {
                           $enums = array_merge($enums, $valuesArray);
