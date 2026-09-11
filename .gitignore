@@ -1,6 +1,7 @@
 /vendor
 /build
 /.phpunit.cache
+/composer.lock
 /workbench
 /tests
 /testbench.yaml
