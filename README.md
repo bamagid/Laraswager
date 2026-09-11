@@ -8,13 +8,19 @@
 
 ## Introduction
 
-`bamagid/laraswagger` is a Laravel package designed to automate the generation of Swagger documentation. Once installed, it requires no additional configuration. This package ensures that your API documentation is always up to date with minimal effort.
+`bamagid/laraswagger` is a Laravel package that automatically generates Swagger/OpenAPI documentation for your API. It reads your routes, controllers, and validation rules, and turns them into a documentation page — no YAML to write, no annotations to maintain by hand.
 
 ### 🎉 Features
 
-- **Automatic Documentation**: Generate API documentation seamlessly without running extra commands
-- **Customizable Descriptions**: Add custom descriptions to your endpoints via comments
-- **Real-time Updates**: Keep your documentation updated in real-time (default behavior)
+- **Automatic documentation**: your API docs stay in sync with your code, with no extra commands to run
+- **Reads your existing validation**: `FormRequest` classes and inline `$request->validate([...])` calls are turned into request body schemas
+- **Custom summaries**: describe an endpoint with a simple doc comment
+- **Real-time updates**: regenerated automatically on every request by default
+
+### ✅ Requirements
+
+- PHP 8.1+
+- Laravel 10 and above (any future major version included — the constraint isn't capped)
 
 ### 📦 Installation
 
@@ -22,49 +28,53 @@
 composer require bamagid/laraswagger
 ```
 
-### ⚙️ Configuration
+That's it — no service provider to register, no `.env` changes required. The package works out of the box.
 
-No additional setup is required post-installation. The package works out of the box, using sensible defaults from your `.env` file — it no longer writes to `.env` for you.
+## 🛠️ How to use it
 
-```env
-APP_NAME=My API
-APP_DESCRIPTION=The description of your API
-AUTO_GENERATE_DOCS=true
-```
+### 1. Generating the documentation
 
-If you need more control, publish the config file and edit `config/laraswagger.php` directly:
+By default, the documentation regenerates automatically on every request (see [Controlling when it regenerates](#controlling-when-it-regenerates) to change this). To generate it manually at any time:
 
 ```bash
-php artisan vendor:publish --tag=laraswagger-config
+php artisan swagger:generate
 ```
 
-```php
-return [
-    'title' => env('APP_NAME', config('app.name')),
-    'description' => env('APP_DESCRIPTION', ''),
-    'auto_generate' => env('AUTO_GENERATE_DOCS', true),
-];
+This writes the OpenAPI spec to `public/api-docs/api-docs.json` and copies the Swagger UI assets alongside it.
+
+### 2. Viewing the documentation
+
+Once generated, the documentation is browsable at:
+
+```
+/api/documentation
 ```
 
-### 🛠️ Usage
+This route and page are registered directly by the package — you don't need an `api.php` routes file for it to work, and it won't touch yours. If you want to customize the page itself, publish it and edit your own copy:
 
-#### Adding Descriptions to Endpoints
+```bash
+php artisan vendor:publish --tag=laraswagger-views
+```
 
-To document an endpoint, use a @summary comment above the corresponding function:
+### 3. Adding a summary to an endpoint
+
+Document what an endpoint does with a `@summary` line in its doc comment:
 
 ```php
 /**
- * @summary This endpoint performs a specific action
- * Additional comments can go here.
+ * @summary Creates a new article
  */
-public function exampleFunction() {
-    // Your code
+public function store(Request $request)
+{
+    // ...
 }
 ```
 
-#### Excluding a route from the documentation
+That text shows up next to the endpoint in the generated documentation.
 
-Add `@swagger-ignore` to a method's doc comment to skip it entirely — useful for internal/admin-only endpoints you don't want in the public spec:
+### 4. Excluding a route from the documentation
+
+Add `@swagger-ignore` to a method's doc comment to leave it out entirely — handy for internal or admin-only endpoints you don't want in the public spec:
 
 ```php
 /**
@@ -76,90 +86,83 @@ public function destroy(int $id)
 }
 ```
 
-#### Environment Variable
+### 5. How request bodies get their fields
 
-Control real-time documentation updates with the `AUTO_GENERATE_DOCS` environment variable:
+For `POST`, `PUT` and `PATCH` routes, the generator figures out the request body schema in this order:
 
-- `true` (default): Real-time documentation updates
-- `false`: Manual documentation generation
+1. **A `FormRequest` type-hinted on the action.** Your `rules()` method is called as-is, so whatever it returns is what gets documented.
+2. **An inline validation call written directly in the method** — `$request->validate([...])`, `Validator::make($data, [...])`, or a `$rules = [...]` array passed to `validate()`. This is read without running your controller code, so it works safely even outside of a real HTTP request.
+3. **Neither of the above? Falls back to your database.** The generator guesses the table from the controller's name (`ArticleController` → `articles`) and documents its columns instead. Columns Laravel manages itself — `id`, `created_at`, `updated_at`, `deleted_at`, `remember_token`, `email_verified_at` — are always left out, since an API client never submits those.
 
-Add to your .env file:
+**What rules are understood:** all the standard ones (`required`, `string`, `integer`, `between:`, `in:`, `date`, `mimes:`, ...), plus the common `Rule::` helpers (`Rule::in()`, `Rule::unique()`, `Rule::exists()`, `Rule::enum()`, `Rule::email()`, `Rule::file()`, and similar) when they come from a `FormRequest`.
+
+**If a rule can't be understood** — a custom rule class, a closure, or something built dynamically at runtime — the field is simply documented as a generic string instead. Nothing breaks and nothing is skipped; you just get a slightly less precise type for that one field. Prefer literal rule arrays or a `FormRequest` if you want everything typed exactly.
+
+### 6. Controlling when it regenerates
+
+By default, the documentation regenerates automatically after every artisan command runs. To turn that off and regenerate only when you run `swagger:generate` yourself, add this to your `.env`:
 
 ```env
-AUTO_GENERATE_DOCS=true
+AUTO_GENERATE_DOCS=false
 ```
 
-#### Command
+### 7. Customizing the title and description
 
-When `AUTO_GENERATE_DOCS` is set to false, generate documentation using:
+The generated spec's title and description come from your `.env` by default:
+
+```env
+APP_NAME=My API
+APP_DESCRIPTION=The description of your API
+```
+
+For more control, publish the config file and edit it directly:
 
 ```bash
-php artisan swagger:generate
+php artisan vendor:publish --tag=laraswagger-config
 ```
 
-#### Understanding validation rules
-
-`swagger:generate` reads your validation rules from two sources, checked in this order:
-
-1. **A `FormRequest` type-hinted on the action** — any class extending `Illuminate\Foundation\Http\FormRequest`, whatever its name (`StoreUserRequest`, `UpdateArticleRequest`, ...). `rules()` is actually called (it's your own code, running normally), so anything it can compute, the generator sees. If `rules()` throws (for example because it relies on `$this->route()` or `auth()` outside of a real HTTP request), that specific route is reported in the warning table instead of crashing the whole command.
-2. **An inline `$request->validate([...])`, `Validator::make($data, [...])`, or `$rules = [...]; $request->validate($rules);` written as a literal array** in the method body. This path is read statically (via `nikic/php-parser`) — your controller code is *not* executed — because these can appear in *any* method, not just ones behind a `FormRequest`.
-
-All standard Laravel validation rules (`required`, `string`, `integer`, `between:`, `in:`, `date`, `mimes:`, ...) are mapped to their OpenAPI type/format/constraint equivalent.
-
-**`Rule` objects** coming from a `FormRequest` are real PHP objects at that point, so the generator resolves the ones it can:
-
-- `Rule::in()`, `Rule::notIn()`, `Rule::unique()`, `Rule::exists()`, `Rule::date()`, `Rule::numeric()`, `Rule::array()`, `Rule::dimensions()`, `Rule::requiredIf()`, `Rule::excludeIf()`, `Rule::prohibitedIf()` — converted via their own `__toString()` (Laravel's own mechanism) and parsed like any other rule string.
-- `Rule::enum(SomeEnum::class)` — read via reflection to list the enum's actual cases as the schema's `enum`.
-- `Rule::email()` and `Rule::file()` / `Rule::imageFile()` — recognized directly (`format: email` / `format: binary`).
-- `Rule::can(...)`, `Rule::when(...)`, `Rule::unless(...)`, `Rule::forEach(...)`, and `Password::...()` rules are authorization/conditional/composite logic with no fixed type to infer: they fall back to `"type": "string"` with a warning, same as a genuinely custom rule.
-
-The same `Rule::...()` calls written *inline* inside `$request->validate([...])` can't be resolved this way — evaluating them would mean executing your code — so they're always reported as a warning there, with a suggestion to move that validation into a `FormRequest`.
-
-**Closures and other rule objects with custom logic** (a rule written as an inline closure, or a custom `Rule`/`ValidationRule` class without a meaningful `__toString()`) genuinely can't be turned into a type: the field falls back to `"type": "string"` and a warning names exactly which field and controller/method it came from, rather than the whole command crashing.
-
-Rules built dynamically at runtime and passed to `validate()` (assigned from a variable that isn't itself a literal array, computed in another method, etc.) can't be read without executing your code either, so they are reported as a warning and skipped for that field. Prefer literal rule arrays or a `FormRequest` to keep a route fully documentable.
-
-#### Troubleshooting generation errors
-
-If something couldn't be documented, `swagger:generate` prints a summary table instead of a generic error, naming exactly what happened and what to do about it:
-
-```
-⚠ 2 avertissement(s) rencontré(s) pendant la génération de la documentation :
-+-----------------------------+--------+---------------------------------------------+------------------------------------------------+
-| Contrôleur::méthode / Route | Champ  | Problème                                     | Recommandation                                  |
-+-----------------------------+--------+-----------------------------------------------+------------------------------------------------+
-| ArticleController::store    | phone  | Règle de validation non reconnue: phone_be   | ... le champ est documenté en "string" par défaut. |
-| UserController::store       | -      | ... construit dynamiquement (variable) ...   | Passez un tableau littéral, ou utilisez un FormRequest. |
-+-----------------------------+--------+-----------------------------------------------+------------------------------------------------+
+```php
+// config/laraswagger.php
+return [
+    'title' => env('APP_NAME', config('app.name')),
+    'description' => env('APP_DESCRIPTION', ''),
+    'auto_generate' => env('AUTO_GENERATE_DOCS', true),
+];
 ```
 
-Each row names the controller/method, the field involved, the precise reason, and a concrete fix — the documentation is still generated for every other route even when some fields couldn't be resolved.
+### 8. When something can't be documented
 
-#### Accessing the Documentation
+Most of the time, `swagger:generate` finishes without saying anything. It only speaks up when a route or field is left genuinely **undocumented** — for example, a controller that no longer exists, or a whole validation array built dynamically at runtime that can't be read:
 
-The generated Swagger documentation is available at the following route:
+```
+⚠ 1 avertissement(s) bloquant(s) rencontré(s) pendant la génération de la documentation.
 
-```bash
-/api/documentation
+ ➜ UserController::store
+    Un appel de validation a été trouvé, mais son tableau de règles est construit dynamiquement (variable) et ne peut pas être lu sans exécuter de code.
+    → Utilisez un tableau littéral ou un FormRequest.
 ```
 
-This page and route are registered directly by the package's service provider (it doesn't modify your `routes/api.php` or copy files into `resources/views` anymore) — it works whether or not you have an `api.php` routes file. To customize the page, publish it and edit the copy:
+Each entry names the exact controller/method, the field involved, and a short fix — the rest of your documentation is still generated normally. If [`laravel/prompts`](https://github.com/laravel/prompts) is installed (`composer require laravel/prompts`), this renders as a responsive table instead of the plain block above; it's entirely optional.
 
-```bash
-php artisan vendor:publish --tag=laraswagger-views
-```
+If something truly unexpected happens, the command prints a short error (type, message, and where it occurred) and exits with a non-zero status, instead of a raw stack trace. Run with `-v` to see the full trace.
 
 ## FRANÇAIS
 
 ## Introduction
 
-`bamagid/laraswagger` est un package Laravel conçu pour automatiser la génération de documentation Swagger. Une fois installé, il ne nécessite aucune configuration supplémentaire. Ce package garantit que votre documentation API reste toujours à jour avec un minimum d'effort.
+`bamagid/laraswagger` est un package Laravel qui génère automatiquement la documentation Swagger/OpenAPI de votre API. Il lit vos routes, vos contrôleurs et vos règles de validation, et en fait une page de documentation — sans YAML à écrire, sans annotations à maintenir à la main.
 
 ### 🎉 Fonctionnalités
 
-- **Documentation automatique** : Génération de documentation API sans commandes supplémentaires
-- **Descriptions personnalisables** : Ajout de descriptions aux endpoints via commentaires
-- **Mises à jour en temps réel** : Documentation automatiquement mise à jour (par défaut)
+- **Documentation automatique** : votre doc reste synchronisée avec votre code, sans commande supplémentaire
+- **Lecture de vos validations existantes** : les classes `FormRequest` et les appels `$request->validate([...])` inline sont transformés en schémas de requête
+- **Résumés personnalisables** : décrivez un endpoint avec un simple commentaire
+- **Mises à jour en temps réel** : régénérée automatiquement à chaque requête par défaut
+
+### ✅ Prérequis
+
+- PHP 8.1+
+- Laravel 10 et supérieur (toutes les majeures futures incluses — la contrainte n'a pas de plafond)
 
 ### 📦 Installation
 
@@ -167,85 +170,120 @@ php artisan vendor:publish --tag=laraswagger-views
 composer require bamagid/laraswagger
 ```
 
-### ⚙️ Configuration
+C'est tout — aucun service provider à enregistrer, aucune modification du `.env` requise. Le package fonctionne dès l'installation.
 
-Aucune configuration supplémentaire requise après l'installation : le package utilise les valeurs de votre fichier `.env` par défaut, et n'y écrit plus automatiquement.
+## 🛠️ Comment l'utiliser
 
-```env
-APP_NAME=Mon API
-APP_DESCRIPTION=La description de votre API
-AUTO_GENERATE_DOCS=true
-```
+### 1. Générer la documentation
 
-Pour plus de contrôle, publiez le fichier de configuration et modifiez `config/laraswagger.php` :
-
-```bash
-php artisan vendor:publish --tag=laraswagger-config
-```
-
-### 🛠️ Utilisation
-
-#### Description des endpoints
-
-```php
-/**
- * @summary Cet endpoint exécute une action spécifique
- * D'autres commentaires peuvent être ajoutés ici.
- */
-public function exempleFunction() {
-    // Votre code
-}
-```
-
-#### Variable d'environnement
-
-```env
-AUTO_GENERATE_DOCS=true
-```
-
-#### Commande
+Par défaut, la documentation est régénérée automatiquement à chaque requête (voir [Contrôler quand elle se régénère](#6-contrôler-quand-elle-se-régénère) pour changer ce comportement). Pour la générer manuellement à tout moment :
 
 ```bash
 php artisan swagger:generate
 ```
 
-#### Comprendre l'analyse des règles de validation
+Cela écrit la spécification OpenAPI dans `public/api-docs/api-docs.json` et copie les assets de Swagger UI à côté.
 
-`swagger:generate` lit vos règles de validation de façon statique (il n'exécute jamais le code de vos contrôleurs), dans cet ordre :
+### 2. Voir la documentation
 
-1. Un `FormRequest` typé sur l'action (`rules()` est appelé directement).
-2. Un `$request->validate([...])`, `Validator::make($data, [...])`, ou `$rules = [...]; $request->validate($rules);` **écrit comme un tableau littéral** dans le corps de la méthode.
-
-Toutes les règles de validation standard de Laravel (`required`, `string`, `integer`, `between:`, `in:`, `date`, `mimes:`, ...) sont converties vers le type/format/contrainte OpenAPI correspondant. Une règle non reconnue (règle personnalisée, objet `Rule::...()`) n'est pas une erreur fatale : le champ est documenté en `"type": "string"` et un avertissement est ajouté au tableau récapitulatif, plutôt que de faire planter toute la commande.
-
-Pour garder une route documentable, préférez des tableaux de règles littéraux ou un `FormRequest`. Les règles construites dynamiquement à l'exécution (variable qui n'est pas elle-même un tableau littéral, calculée dans une autre méthode, etc.) ne peuvent pas être lues sans exécuter votre code : elles sont donc signalées comme avertissement et ignorées pour ce champ.
-
-#### Diagnostiquer les erreurs de génération
-
-Si un élément n'a pas pu être documenté, `swagger:generate` affiche un tableau récapitulatif au lieu d'une erreur générique, en nommant précisément ce qui s'est passé et comment le corriger :
+Une fois générée, la documentation est consultable à l'adresse :
 
 ```
-⚠ 2 avertissement(s) rencontré(s) pendant la génération de la documentation :
-+-----------------------------+--------+---------------------------------------------+------------------------------------------------+
-| Contrôleur::méthode / Route | Champ  | Problème                                     | Recommandation                                  |
-+-----------------------------+--------+-----------------------------------------------+------------------------------------------------+
-| ArticleController::store    | phone  | Règle de validation non reconnue: phone_be   | ... le champ est documenté en "string" par défaut. |
-| UserController::store       | -      | ... construit dynamiquement (variable) ...   | Passez un tableau littéral, ou utilisez un FormRequest. |
-+-----------------------------+--------+-----------------------------------------------+------------------------------------------------+
-```
-
-Chaque ligne indique le contrôleur/la méthode, le champ concerné, la raison précise et une correction concrète — la documentation reste générée pour toutes les autres routes même si certains champs n'ont pas pu être résolus.
-
-#### Accéder à la Documentation
-
-La documentation Swagger générée est disponible à l'adresse suivante :
-
-```bash
 /api/documentation
 ```
 
-Cette page et cette route sont enregistrées directement par le service provider du package (il ne modifie plus votre `routes/api.php` ni ne copie de fichier dans `resources/views`) — ça fonctionne que vous ayez un fichier `api.php` ou non. Pour personnaliser la page, publiez-la et modifiez la copie :
+Cette route et cette page sont enregistrées directement par le package — vous n'avez pas besoin d'un fichier `routes/api.php` pour que ça fonctionne, et le package ne touchera pas au vôtre. Pour personnaliser la page elle-même, publiez-la et modifiez votre propre copie :
 
 ```bash
 php artisan vendor:publish --tag=laraswagger-views
 ```
+
+### 3. Ajouter un résumé à un endpoint
+
+Décrivez ce que fait un endpoint avec une ligne `@summary` dans son commentaire :
+
+```php
+/**
+ * @summary Crée un nouvel article
+ */
+public function store(Request $request)
+{
+    // ...
+}
+```
+
+Ce texte apparaît à côté de l'endpoint dans la documentation générée.
+
+### 4. Exclure une route de la documentation
+
+Ajoutez `@swagger-ignore` au commentaire d'une méthode pour l'exclure entièrement — pratique pour les endpoints internes ou réservés aux admins que vous ne voulez pas dans la spec publique :
+
+```php
+/**
+ * @swagger-ignore
+ */
+public function destroy(int $id)
+{
+    // Non documenté.
+}
+```
+
+### 5. D'où viennent les champs du corps de requête
+
+Pour les routes `POST`, `PUT` et `PATCH`, le générateur détermine le schéma du corps de requête dans cet ordre :
+
+1. **Un `FormRequest` typé sur l'action.** Votre méthode `rules()` est appelée telle quelle, donc tout ce qu'elle retourne est documenté.
+2. **Un appel de validation inline écrit directement dans la méthode** — `$request->validate([...])`, `Validator::make($data, [...])`, ou un tableau `$rules = [...]` passé à `validate()`. C'est lu sans exécuter votre code de contrôleur, donc ça fonctionne même en dehors d'une vraie requête HTTP.
+3. **Ni l'un ni l'autre ? Repli sur votre base de données.** Le générateur devine la table à partir du nom du contrôleur (`ArticleController` → `articles`) et documente ses colonnes à la place. Les colonnes gérées par Laravel lui-même — `id`, `created_at`, `updated_at`, `deleted_at`, `remember_token`, `email_verified_at` — sont toujours exclues, puisqu'un client API ne les soumet jamais.
+
+**Règles comprises :** toutes les règles standard (`required`, `string`, `integer`, `between:`, `in:`, `date`, `mimes:`, ...), plus les principaux helpers `Rule::` (`Rule::in()`, `Rule::unique()`, `Rule::exists()`, `Rule::enum()`, `Rule::email()`, `Rule::file()`, et similaires) quand ils viennent d'un `FormRequest`.
+
+**Si une règle n'est pas comprise** — une classe de règle personnalisée, une closure, ou quelque chose construit dynamiquement à l'exécution — le champ est simplement documenté comme une chaîne générique à la place. Rien ne casse et rien n'est ignoré ; vous obtenez juste un type un peu moins précis pour ce champ-là. Préférez des tableaux de règles littéraux ou un `FormRequest` si vous voulez que tout soit typé exactement.
+
+### 6. Contrôler quand elle se régénère
+
+Par défaut, la documentation se régénère automatiquement après chaque commande artisan. Pour désactiver ça et ne la régénérer que lorsque vous lancez `swagger:generate` vous-même, ajoutez ceci à votre `.env` :
+
+```env
+AUTO_GENERATE_DOCS=false
+```
+
+### 7. Personnaliser le titre et la description
+
+Le titre et la description de la spec générée viennent de votre `.env` par défaut :
+
+```env
+APP_NAME=Mon API
+APP_DESCRIPTION=La description de votre API
+```
+
+Pour plus de contrôle, publiez le fichier de configuration et modifiez-le directement :
+
+```bash
+php artisan vendor:publish --tag=laraswagger-config
+```
+
+```php
+// config/laraswagger.php
+return [
+    'title' => env('APP_NAME', config('app.name')),
+    'description' => env('APP_DESCRIPTION', ''),
+    'auto_generate' => env('AUTO_GENERATE_DOCS', true),
+];
+```
+
+### 8. Quand quelque chose ne peut pas être documenté
+
+La plupart du temps, `swagger:generate` termine sans rien afficher de particulier. Il ne se manifeste que lorsqu'une route ou un champ reste réellement **non documenté** — par exemple un contrôleur qui n'existe plus, ou un tableau de validation entier construit dynamiquement à l'exécution et impossible à lire :
+
+```
+⚠ 1 avertissement(s) bloquant(s) rencontré(s) pendant la génération de la documentation.
+
+ ➜ UserController::store
+    Un appel de validation a été trouvé, mais son tableau de règles est construit dynamiquement (variable) et ne peut pas être lu sans exécuter de code.
+    → Utilisez un tableau littéral ou un FormRequest.
+```
+
+Chaque entrée indique le contrôleur/la méthode exacts, le champ concerné, et une correction courte — le reste de votre documentation est généré normalement. Si [`laravel/prompts`](https://github.com/laravel/prompts) est installé (`composer require laravel/prompts`), ce rendu devient un tableau adaptatif au lieu du bloc ci-dessus ; c'est entièrement optionnel.
+
+Si quelque chose de vraiment imprévu se produit, la commande affiche une erreur courte (type, message, et où ça s'est produit) et se termine avec un code de sortie non nul, plutôt qu'une pile d'appels brute. Lancez avec `-v` pour voir la pile complète.
