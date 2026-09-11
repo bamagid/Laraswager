@@ -15,7 +15,7 @@
 - **Automatic documentation**: your API docs stay in sync with your code, with no extra commands to run
 - **Reads your existing validation**: `FormRequest` classes and inline `$request->validate([...])` calls are turned into request body schemas
 - **Custom summaries**: describe an endpoint with a simple doc comment
-- **Real-time updates**: regenerated automatically on every request by default
+- **Real-time updates**: regenerated automatically after every artisan command by default
 
 ### ✅ Requirements
 
@@ -34,23 +34,23 @@ That's it — no service provider to register, no `.env` changes required. The p
 
 ### 1. Generating the documentation
 
-By default, the documentation regenerates automatically on every request (see [Controlling when it regenerates](#controlling-when-it-regenerates) to change this). To generate it manually at any time:
+By default, the documentation regenerates automatically after every artisan command (and continuously in the background while `php artisan serve` is running) — see [Controlling when it regenerates](#6-controlling-when-it-regenerates) to change this. You can also trigger it manually at any time:
 
 ```bash
 php artisan swagger:generate
 ```
 
-This writes the OpenAPI spec to `public/api-docs/api-docs.json` and copies the Swagger UI assets alongside it.
+Neither is actually required before your first visit, though: the documentation page generates it on demand the first time it's needed.
 
 ### 2. Viewing the documentation
 
-Once generated, the documentation is browsable at:
+The documentation is browsable at:
 
 ```
 /api/documentation
 ```
 
-This route and page are registered directly by the package — you don't need an `api.php` routes file for it to work, and it won't touch yours. If you want to customize the page itself, publish it and edit your own copy:
+This route, its page, and the Swagger UI assets it needs are all served directly by the package — nothing is copied into your `public/` folder, and you don't need an `api.php` routes file for it to work. It's available right after `composer require`, with no setup step. If you want to customize the page itself, publish it and edit your own copy:
 
 ```bash
 php artisan vendor:publish --tag=laraswagger-views
@@ -157,7 +157,7 @@ If something truly unexpected happens, the command prints a short error (type, m
 - **Documentation automatique** : votre doc reste synchronisée avec votre code, sans commande supplémentaire
 - **Lecture de vos validations existantes** : les classes `FormRequest` et les appels `$request->validate([...])` inline sont transformés en schémas de requête
 - **Résumés personnalisables** : décrivez un endpoint avec un simple commentaire
-- **Mises à jour en temps réel** : régénérée automatiquement à chaque requête par défaut
+- **Mises à jour en temps réel** : régénérée automatiquement après chaque commande artisan par défaut
 
 ### ✅ Prérequis
 
@@ -176,23 +176,23 @@ C'est tout — aucun service provider à enregistrer, aucune modification du `.e
 
 ### 1. Générer la documentation
 
-Par défaut, la documentation est régénérée automatiquement à chaque requête (voir [Contrôler quand elle se régénère](#6-contrôler-quand-elle-se-régénère) pour changer ce comportement). Pour la générer manuellement à tout moment :
+Par défaut, la documentation est régénérée automatiquement après chaque commande artisan (et en continu en arrière-plan pendant que `php artisan serve` tourne) — voir [Contrôler quand elle se régénère](#6-contrôler-quand-elle-se-régénère) pour changer ce comportement. Vous pouvez aussi la générer manuellement à tout moment :
 
 ```bash
 php artisan swagger:generate
 ```
 
-Cela écrit la spécification OpenAPI dans `public/api-docs/api-docs.json` et copie les assets de Swagger UI à côté.
+Aucune des deux n'est en fait requise avant votre première visite : la page de documentation la génère à la demande la première fois qu'elle en a besoin.
 
 ### 2. Voir la documentation
 
-Une fois générée, la documentation est consultable à l'adresse :
+La documentation est consultable à l'adresse :
 
 ```
 /api/documentation
 ```
 
-Cette route et cette page sont enregistrées directement par le package — vous n'avez pas besoin d'un fichier `routes/api.php` pour que ça fonctionne, et le package ne touchera pas au vôtre. Pour personnaliser la page elle-même, publiez-la et modifiez votre propre copie :
+Cette route, sa page, et les assets Swagger UI dont elle a besoin sont tous servis directement par le package — rien n'est copié dans votre dossier `public/`, et vous n'avez pas besoin d'un fichier `routes/api.php` pour que ça fonctionne. Elle est disponible juste après `composer require`, sans aucune étape de mise en place. Pour personnaliser la page elle-même, publiez-la et modifiez votre propre copie :
 
 ```bash
 php artisan vendor:publish --tag=laraswagger-views

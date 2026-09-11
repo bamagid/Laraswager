@@ -48,7 +48,6 @@ class GenerateSwaggerCommand extends Command
 
   private function generate()
   {
-    $this->copySwaggerFiles();
     $routes = $this->scanRoutes();
 
     if ($routes->isEmpty() && ! file_exists(base_path('routes/api.php'))) {
