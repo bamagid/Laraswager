@@ -69,7 +69,7 @@ trait SwaggerPropertiesTrait
     $properties = [];
     foreach ($columns as $column) {
       try {
-        if ($column != 'id' && $column != 'created_at' && $column != 'updated_at') {
+        if (! in_array($column, ['id', 'created_at', 'updated_at', 'deleted_at', 'remember_token', 'email_verified_at'], true)) {
           $type = Schema::getColumnType($tableName, $column);
           $enums = [];
           if ($type == 'enum') {
